@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Viewing {{ log_name }} - Log Viewer{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>{{ log_name }}</h2>
+    <div>
+        <a href="/download/{{ log_id }}" class="btn btn-secondary">Download Log</a>
+        <a href="/" class="btn btn-outline-primary">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search in log...">
+            <button class="btn btn-primary" onclick="searchLog()">Search</button>
+        </div>
+    </div>
+</div>
+
+<div id="logContainer" class="log-container"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const logId = {{ log_id }};
+    const logContainer = document.getElementById('logContainer');
+    let lastSize = 0;
+
+    async function fetchLog() {
+        try {
+            const response = await fetch(`/log-stream/${logId}?last_size=${lastSize}`);
+            const data = await response.json();
+
+            if (data.content) {
+                const div = document.createElement('div');
+                div.innerText = data.content;
+                logContainer.appendChild(div);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                lastSize = data.new_size;
+            }
+        } catch (e) {
+            console.error("Error fetching log", e);
+        }
+    }
+
+    function searchLog() {
+        const term = document.getElementById('searchInput').value.toLowerCase();
+        const lines = logContainer.getElementsByTagName('div');
+        for (let line of lines) {
+            if (term && line.innerText.toLowerCase().includes(term)) {
+                line.classList.add('search-highlight');
+            } else {
+                line.classList.remove('search-highlight');
+            }
+        }
+    }
+
+    // Initial load and then tail -f behavior
+    setInterval(fetchLog, 2000);
+    fetchLog();
+</script>
+{% endblock %}

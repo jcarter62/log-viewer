@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Log Viewer{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <h3>Add Log File</h3>
+        <form action="/add-log" method="post" class="mb-4">
+            <div class="mb-3">
+                <label class="form-label">Display Name</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Full Path</label>
+                <input type="text" name="path" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-success">Add Log</button>
+        </form>
+    </div>
+    <div class="col-md-8">
+        <h3>Configured Logs</h3>
+        <ul class="list-group">
+            {% for log in logs %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <a href="/view/{{ loop.index0 }}">{{ log.name }} ({{ log.path }})</a>
+                <form action="/delete-log/{{ loop.index0 }}" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
