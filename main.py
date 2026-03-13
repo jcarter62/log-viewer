@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 import aiofiles
+import re
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -31,6 +33,20 @@ def save_settings(settings):
 
 def is_logged_in(request: Request):
     return request.session.get("user") == ADMIN_USER
+
+def parse_log_line(line):
+    # Regex to extract timestamp and username
+    # 2026-01-06 09:34:17,365 - kc-portal - INFO - IP: 104.51.149.143 (Mac) - Anonymous - GET /
+    match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - .*? - .*? - IP: .*? \(.*?\) - (.*?) - ", line)
+    if match:
+        timestamp_str, username = match.groups()
+        try:
+            # Parse timestamp, ignoring milliseconds for simplicity
+            timestamp = datetime.strptime(timestamp_str.split(',')[0], "%Y-%m-%d %H:%M:%S")
+            return timestamp, username
+        except ValueError:
+            pass
+    return None, None
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -108,6 +124,38 @@ async def log_stream(request: Request, log_id: int, last_size: int = 0):
             content = await f.read()
             
     return {"content": content, "new_size": current_size}
+
+@app.get("/analyze-log/{log_id}")
+async def analyze_log(request: Request, log_id: int, period: str = "day"):
+    if not is_logged_in(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    
+    settings = get_settings()
+    if not (0 <= log_id < len(settings["logs"])):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    
+    path = settings["logs"][log_id]["path"]
+    if not os.path.exists(path):
+        return JSONResponse({"error": "File not found"}, status_code=404)
+
+    now = datetime.now()
+    if period == "day":
+        start_time = now - timedelta(days=1)
+    elif period == "week":
+        start_time = now - timedelta(days=7)
+    elif period == "month":
+        start_time = now - timedelta(days=30)
+    else:
+        return JSONResponse({"error": "Invalid period"}, status_code=400)
+
+    unique_users = set()
+    async with aiofiles.open(path, mode='r') as f:
+        async for line in f:
+            ts, user = parse_log_line(line)
+            if ts and ts >= start_time:
+                unique_users.add(user)
+    
+    return {"users": sorted(list(unique_users))}
 
 @app.get("/download/{log_id}")
 async def download_log(request: Request, log_id: int):

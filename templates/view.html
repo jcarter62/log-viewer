@@ -16,6 +16,17 @@
             <button class="btn btn-primary" onclick="searchLog()">Search</button>
         </div>
     </div>
+    <div class="col-md-6 text-end">
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-outline-info" onclick="analyzeLog('day')">Last Day</button>
+            <button type="button" class="btn btn-outline-info" onclick="analyzeLog('week')">Last Week</button>
+            <button type="button" class="btn btn-outline-info" onclick="analyzeLog('month')">Last Month</button>
+        </div>
+    </div>
+</div>
+
+<div id="analysisResult" class="alert alert-info d-none mb-3">
+    <strong>Unique Visitors:</strong> <span id="visitorList"></span>
 </div>
 
 <div id="logContainer" class="log-container"></div>
@@ -54,6 +65,26 @@
             } else {
                 line.classList.remove('search-highlight');
             }
+        }
+    }
+
+    async function analyzeLog(period) {
+        const resultDiv = document.getElementById('analysisResult');
+        const visitorSpan = document.getElementById('visitorList');
+        
+        try {
+            const response = await fetch(`/analyze-log/${logId}?period=${period}`);
+            const data = await response.json();
+            
+            if (data.users) {
+                visitorSpan.innerText = data.users.length > 0 ? data.users.join(', ') : 'None found';
+                resultDiv.classList.remove('d-none');
+            } else if (data.error) {
+                alert(data.error);
+            }
+        } catch (e) {
+            console.error("Error analyzing log", e);
+            alert("Error analyzing log");
         }
     }
 
