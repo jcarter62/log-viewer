@@ -26,7 +26,9 @@
 </div>
 
 <div id="analysisResult" class="alert alert-info d-none mb-3">
-    <strong>Unique Visitors:</strong> <span id="visitorList"></span>
+    <strong>Unique Visitors:</strong>
+    <button class="btn btn-sm btn-outline-secondary float-end" onclick="resetFilter()">Show All</button>
+    <div id="visitorList" class="mt-2"></div>
 </div>
 
 <div id="logContainer" class="log-container"></div>
@@ -38,6 +40,46 @@
     const logId = {{ log_id }};
     const logContainer = document.getElementById('logContainer');
     let lastSize = 0;
+    let currentFilter = null;
+
+    function getVisitorFromLine(line) {
+        // Regex to extract timestamp, IP, and username
+        // 2026-01-06 09:34:17,365 - kc-portal - INFO - IP: 104.51.149.143 (Mac) - Anonymous - GET /
+        const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - .*? - .*? - IP: (.*?) \(.*?\) - (.*?) - /);
+        if (match) {
+            const ip = match[2];
+            const username = match[3];
+            return username === "Anonymous" ? ip : username;
+        }
+        return null;
+    }
+
+    function applyFilter(div) {
+        if (!currentFilter) {
+            div.style.display = '';
+            return;
+        }
+        const visitor = div.getAttribute('data-visitor');
+        if (visitor === currentFilter) {
+            div.style.display = '';
+        } else {
+            div.style.display = 'none';
+        }
+    }
+
+    function filterByVisitor(visitor) {
+        currentFilter = visitor;
+        for (let div of logContainer.children) {
+            applyFilter(div);
+        }
+    }
+
+    function resetFilter() {
+        currentFilter = null;
+        for (let div of logContainer.children) {
+            div.style.display = '';
+        }
+    }
 
     async function fetchLog() {
         try {
@@ -45,9 +87,19 @@
             const data = await response.json();
 
             if (data.content) {
-                const div = document.createElement('div');
-                div.innerText = data.content;
-                logContainer.appendChild(div);
+                const lines = data.content.split('\n');
+                lines.forEach(line => {
+                    if (line.length > 0) {
+                        const div = document.createElement('div');
+                        div.innerText = line;
+                        const visitor = getVisitorFromLine(line);
+                        if (visitor) {
+                            div.setAttribute('data-visitor', visitor);
+                        }
+                        applyFilter(div);
+                        logContainer.appendChild(div);
+                    }
+                });
                 logContainer.scrollTop = logContainer.scrollHeight;
                 lastSize = data.new_size;
             }
@@ -58,8 +110,7 @@
 
     function searchLog() {
         const term = document.getElementById('searchInput').value.toLowerCase();
-        const lines = logContainer.getElementsByTagName('div');
-        for (let line of lines) {
+        for (let line of logContainer.children) {
             if (term && line.innerText.toLowerCase().includes(term)) {
                 line.classList.add('search-highlight');
             } else {
@@ -70,14 +121,25 @@
 
     async function analyzeLog(period) {
         const resultDiv = document.getElementById('analysisResult');
-        const visitorSpan = document.getElementById('visitorList');
+        const visitorDiv = document.getElementById('visitorList');
         
         try {
             const response = await fetch(`/analyze-log/${logId}?period=${period}`);
             const data = await response.json();
             
             if (data.users) {
-                visitorSpan.innerText = data.users.length > 0 ? data.users.join(', ') : 'None found';
+                visitorDiv.innerHTML = '';
+                if (data.users.length > 0) {
+                    data.users.forEach(user => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-sm btn-info me-1 mb-1';
+                        btn.innerText = user;
+                        btn.onclick = () => filterByVisitor(user);
+                        visitorDiv.appendChild(btn);
+                    });
+                } else {
+                    visitorDiv.innerText = 'None found';
+                }
                 resultDiv.classList.remove('d-none');
             } else if (data.error) {
                 alert(data.error);
