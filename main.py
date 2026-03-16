@@ -35,18 +35,18 @@ def is_logged_in(request: Request):
     return request.session.get("user") == ADMIN_USER
 
 def parse_log_line(line):
-    # Regex to extract timestamp and username
+    # Regex to extract timestamp, IP, and username
     # 2026-01-06 09:34:17,365 - kc-portal - INFO - IP: 104.51.149.143 (Mac) - Anonymous - GET /
-    match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - .*? - .*? - IP: .*? \(.*?\) - (.*?) - ", line)
+    match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - .*? - .*? - IP: (.*?) \(.*?\) - (.*?) - ", line)
     if match:
-        timestamp_str, username = match.groups()
+        timestamp_str, ip, username = match.groups()
         try:
             # Parse timestamp, ignoring milliseconds for simplicity
             timestamp = datetime.strptime(timestamp_str.split(',')[0], "%Y-%m-%d %H:%M:%S")
-            return timestamp, username
+            return timestamp, username, ip
         except ValueError:
             pass
-    return None, None
+    return None, None, None
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -151,9 +151,12 @@ async def analyze_log(request: Request, log_id: int, period: str = "day"):
     unique_users = set()
     async with aiofiles.open(path, mode='r') as f:
         async for line in f:
-            ts, user = parse_log_line(line)
+            ts, user, ip = parse_log_line(line)
             if ts and ts >= start_time:
-                unique_users.add(user)
+                if user == "Anonymous" and ip:
+                    unique_users.add(ip)
+                else:
+                    unique_users.add(user)
     
     return {"users": sorted(list(unique_users))}
 
